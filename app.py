@@ -197,10 +197,10 @@ def register():
         username = request.form['username']
         password = request.form['password']
         
-        forbidden_names = ['admin', 'administrator', 'root', 'system', 'superuser']
-        if username.lower() in forbidden_names:
-            flash("Tên tài khoản này bị cấm sử dụng! Vui lòng chọn tên khác.", "danger")
-            return redirect(url_for('register'))
+       # forbidden_names = ['admin', 'administrator', 'root', 'system', 'superuser']
+       # if username.lower() in forbidden_names:
+        #    flash("Tên tài khoản này bị cấm sử dụng! Vui lòng chọn tên khác.", "danger")
+         #   return redirect(url_for('register'))
 
         if users_collection.find_one({"_id": username}):
             flash("Tài khoản đã tồn tại!", "danger")
