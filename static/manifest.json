@@ -1,0 +1,15 @@
+{
+  "name": "Hệ thống Bảo mật Mật mã học 2FA",
+  "short_name": "DoAn2FA",
+  "start_url": "/login",
+  "display": "standalone",
+  "background_color": "#050a0f",
+  "theme_color": "#00ff88",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3067/3067403.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

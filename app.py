@@ -35,50 +35,50 @@ DB_FILE = "database.json"
 
 db_users = {}
 db_messages = []
-db_otp_cache = {} # Riêng OTP Cache chỉ cần lưu trên RAM vì nó hết hạn sau 3 phút
+db_login_history = [] 
+db_otp_cache = {} 
 
 def load_db():
-    """Tải dữ liệu từ ổ cứng lên RAM khi khởi động Server"""
-    global db_users, db_messages
+    global db_users, db_messages, db_login_history
     try:
         if os.path.exists(DB_FILE):
             with open(DB_FILE, "r") as f:
                 data = json.load(f)
                 db_users = data.get("users", {})
                 db_messages = data.get("messages", [])
+                db_login_history = data.get("login_history", [])
     except Exception as e:
         print(f"[CẢNH BÁO] Lỗi đọc Database: {e}")
 
 def save_db():
-    """Ghi đè dữ liệu từ RAM xuống ổ cứng mỗi khi có thay đổi"""
     try:
         with open(DB_FILE, "w") as f:
-            json.dump({"users": db_users, "messages": db_messages}, f, indent=4)
+            json.dump({
+                "users": db_users, 
+                "messages": db_messages, 
+                "login_history": db_login_history
+            }, f, indent=4)
     except Exception as e:
         print(f"[CẢNH BÁO] Lỗi ghi Database: {e}")
 
-# Kích hoạt tải dữ liệu ngay khi chạy app
 load_db()
 
 # ==========================================
 # TÌNH BÁO BẢO MẬT (CYBER THREAT INTELLIGENCE)
 # ==========================================
 def check_pwned_password(password: str) -> int:
-    """Kiểm tra mật khẩu có bị lộ trên toàn cầu hay chưa qua API 'Have I Been Pwned'"""
-    # Băm mật khẩu bằng SHA-1 (Tiêu chuẩn của API này)
     sha1_hash = hashlib.sha1(password.encode('utf-8')).hexdigest().upper()
     prefix, suffix = sha1_hash[:5], sha1_hash[5:]
     url = f"https://api.pwnedpasswords.com/range/{prefix}"
     try:
         res = requests.get(url, timeout=3)
         if res.status_code != 200: return 0
-        # Tìm xem hậu tố SHA-1 có nằm trong danh sách bị lộ không
         hashes = (line.split(':') for line in res.text.splitlines())
         for h, count in hashes:
-            if h == suffix: return int(count) # Trả về số lần bị hack
+            if h == suffix: return int(count)
         return 0
     except:
-        return 0 # Nếu rớt mạng, bỏ qua bước kiểm tra
+        return 0 
 
 # ==========================================
 # MODULE GIÁM SÁT (AUDIT LOGS)
@@ -89,19 +89,27 @@ def log_audit(username: str, action: str, status: str):
     browser = request.user_agent.browser.capitalize() if request.user_agent.browser else "Unknown Browser"
     log_entry = {
         "time": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-        "ip": request.remote_addr,
+        "ip": request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip(),
         "device": f"{os_name} - {browser}",
         "action": action,
         "status": status 
     }
     db_users[username].setdefault("audit_logs", []).insert(0, log_entry)
-    db_users[username]["audit_logs"] = db_users[username]["audit_logs"][:15]
-    save_db() # Ghi log vào file
+    db_users[username]["audit_logs"] = db_users[username]["audit_logs"][:15] 
+    save_db()
 
 # ==========================================
 # MODULE MẬT MÃ: AES & RSA
 # ==========================================
-AES_KEY = Fernet.generate_key()
+KEY_FILE = "aes_key.key"
+if os.path.exists(KEY_FILE):
+    with open(KEY_FILE, "rb") as f:
+        AES_KEY = f.read()
+else:
+    AES_KEY = Fernet.generate_key()
+    with open(KEY_FILE, "wb") as f:
+        f.write(AES_KEY)
+
 cipher_suite = Fernet(AES_KEY)
 
 def encrypt_data(data: str) -> str: return cipher_suite.encrypt(data.encode()).decode()
@@ -192,7 +200,6 @@ def register():
             flash("Tài khoản đã tồn tại!", "danger")
             return redirect(url_for('register'))
 
-        # KIỂM TRA MẬT KHẨU RÒ RỈ (HAVE I BEEN PWNED)
         pwned_count = check_pwned_password(password)
         if pwned_count > 0:
             flash(f"CẢNH BÁO: Mật khẩu này đã bị rò rỉ {pwned_count:,} lần trên toàn cầu! Vui lòng chọn mật khẩu khác để đảm bảo an toàn.", "danger")
@@ -217,7 +224,7 @@ def register():
             "last_ip": None
         }
         
-        save_db() # LƯU DATABASE
+        save_db()
         log_audit(username, "Đăng ký tài khoản", "SUCCESS")
 
         qr_url = None
@@ -280,14 +287,20 @@ def verify_2fa():
             session['logged_in_user'] = username
             session.pop('temp_user', None)
             
+            real_ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+            db_login_history.append({
+                "username": username,
+                "login_time": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                "ip_address": real_ip
+            })
+            
             log_audit(username, "Xác thực 2FA (B2)", "SUCCESS")
             
-            current_ip = request.remote_addr
-            if user["last_ip"] and user["last_ip"] != current_ip:
-                flash(f"CẢNH BÁO: Phát hiện đăng nhập từ IP lạ ({current_ip}). IP cũ: {user['last_ip']}", "warning")
+            if user["last_ip"] and user["last_ip"] != real_ip:
+                flash(f"CẢNH BÁO: Phát hiện đăng nhập từ IP lạ ({real_ip}). IP cũ: {user['last_ip']}", "warning")
                 log_audit(username, "Cảnh báo IP Lạ", "WARNING")
-            user["last_ip"] = current_ip
-            save_db() # LƯU DATABASE
+            user["last_ip"] = real_ip
+            save_db() 
 
             return redirect(url_for('dashboard'))
         else:
@@ -299,7 +312,7 @@ def verify_2fa():
                 flash("Bạn đã nhập sai 3 lần. Tài khoản bị khóa 60 giây!", "danger")
             else:
                 flash(f"Mã không hợp lệ! Bạn còn {3 - user['failed_attempts']} lần thử.", "warning")
-            save_db() # LƯU DATABASE
+            save_db() 
 
     return render_template('verify_2fa.html', method=user['method_2fa'])
 
@@ -311,7 +324,7 @@ def dashboard():
     
     if request.method == 'POST' and 'secret_note' in request.form:
         user['secret_note'] = encrypt_data(request.form['secret_note'])
-        save_db() # LƯU DATABASE
+        save_db() 
         log_audit(username, "Cập nhật Két sắt AES", "SUCCESS")
         flash("Đã mã hóa AES và lưu bí mật thành công!", "success")
         
@@ -326,7 +339,7 @@ def dashboard():
                 "ciphertext": encrypted_msg, 
                 "time": time.strftime("%H:%M:%S")
             })
-            save_db() # LƯU DATABASE
+            save_db() 
             log_audit(username, f"Gửi tin RSA cho {receiver}", "SUCCESS")
             flash(f"Đã mã hóa RSA và gửi tin tới {receiver}!", "success")
         else: 
@@ -347,6 +360,15 @@ def dashboard():
         inbox=my_inbox, audit_logs=user['audit_logs']
     )
 
+# ROUTE MỚI: TRẠM GIÁM SÁT HỆ THỐNG
+@app.route('/admin-panel')
+def admin_panel():
+    if 'logged_in_user' not in session: 
+        return redirect(url_for('login'))
+    
+    reversed_history = list(reversed(db_login_history))
+    return render_template('admin.html', login_history=reversed_history, all_users=db_users)
+
 @app.route('/logout')
 def logout():
     if 'logged_in_user' in session:
@@ -356,4 +378,4 @@ def logout():
     return redirect(url_for('login'))
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001, ssl_context='adhoc')
+    app.run(debug=True, port=5001)

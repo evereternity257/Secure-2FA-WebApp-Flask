@@ -1,155 +1,121 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% block content %}
-<div class="row justify-content-center mt-3">
-    <div class="col-md-11">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="text-success fw-bold"><i class="fa-solid fa-server me-2"></i> TRUNG TÂM BẢO MẬT ĐA TẦNG</h2>
-            <a href="/logout" class="btn btn-outline-danger fw-bold"><i class="fa-solid fa-right-from-bracket me-2"></i> Đăng Xuất</a>
+<div class="row mb-4">
+    <div class="col-12 text-center">
+        <h2 class="glitch-text text-uppercase" style="color: #00ff88;">
+            <i class="fa-solid fa-shield-halved"></i> TRUNG TÂM BẢO MẬT
+        </h2>
+        <p class="text-light font-monospace">Đăng nhập thành công: [ <span class="text-warning">{{ username }}</span> ]</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- ========================================== -->
+    <!-- CỘT 1: KÉT SẮT BẢO MẬT AES-256              -->
+    <!-- ========================================== -->
+    <div class="col-md-6">
+        <div class="glass-card p-4 h-100">
+            <h4 class="text-success mb-3"><i class="fa-solid fa-vault"></i> KÉT SẮT AES-256</h4>
+            <form method="POST">
+                <div class="mb-3">
+                    <label class="form-label text-light">Bí mật hiện tại (Đã giải mã):</label>
+                    <textarea class="form-control" rows="2" readonly>{{ decrypted_note }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-light">Bản mã hóa trong Database:</label>
+                    <textarea class="form-control text-warning" rows="2" readonly style="font-size: 0.8rem;">{{ encrypted_note }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-light">Cập nhật bí mật mới:</label>
+                    <input type="text" name="secret_note" class="form-control" placeholder="Nhập nội dung cần bảo mật..." required>
+                </div>
+                <button type="submit" class="btn btn-neon w-100"><i class="fa-solid fa-lock"></i> MÃ HÓA & LƯU TRỮ</button>
+            </form>
         </div>
-        <p class="text-light">Xin chào <strong class="text-warning">{{ username }}</strong> | Giao thức: HTTPS | Mã hóa: AES-256 & RSA-2048</p>
-        <hr class="border-secondary mb-4">
+    </div>
 
-        <!-- TẦNG 1: MÃ HÓA ĐỐI XỨNG AES -->
-        <h4 class="text-info fw-bold mb-3"><i class="fa-solid fa-vault me-2"></i>TẦNG 1: KÉT SẮT CÁ NHÂN (AES)</h4>
-        <div class="row g-4 mb-5">
-            <div class="col-md-6">
-                <div class="card glass-card border-info h-100">
-                    <div class="card-header bg-info text-dark fw-bold">Bản rõ (Két sắt của bạn)</div>
-                    <div class="card-body">
-                        <form method="POST" action="/dashboard">
-                            <textarea name="secret_note" class="form-control mb-3" rows="3">{{ decrypted_note }}</textarea>
-                            <button type="submit" class="btn btn-info w-100 fw-bold text-dark"><i class="fa-solid fa-lock me-2"></i>Lưu & Mã Hóa AES</button>
-                        </form>
-                    </div>
+    <!-- ========================================== -->
+    <!-- CỘT 2: KÊNH LIÊN LẠC BẤT ĐỐI XỨNG RSA-2048 -->
+    <!-- ========================================== -->
+    <div class="col-md-6">
+        <div class="glass-card p-4 h-100">
+            <h4 class="text-info mb-3"><i class="fa-solid fa-walkie-talkie"></i> KÊNH TRUYỀN RSA-2048</h4>
+            <form method="POST">
+                <div class="mb-3">
+                    <label class="form-label text-light">Chọn người nhận:</label>
+                    <select name="receiver" class="form-select" required>
+                        <option value="">-- Danh sách Target --</option>
+                        {% for u in other_users %}
+                            <option value="{{ u }}">{{ u }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card glass-card border-warning h-100">
-                    <div class="card-header bg-warning text-dark fw-bold">Bản mã hóa (Lưu tại DB)</div>
-                    <div class="card-body position-relative">
-                        <button onclick="navigator.clipboard.writeText('{{ encrypted_note }}'); alert('Đã copy Bản mã!')" 
-                                class="btn btn-sm btn-outline-warning position-absolute top-0 end-0 m-2" style="z-index: 10;">
-                            <i class="fa-solid fa-copy"></i>
-                        </button>
-                        <div class="p-2 rounded font-monospace text-success shadow-inner" style="background-color: #0d1117; word-wrap: break-word; font-size: 0.75rem; height: 115px; overflow-y: auto;">
-                            >_ <span id="hacker-text"></span><span class="cursor">|</span>
-                        </div>
-                    </div>
+                <div class="mb-3">
+                    <label class="form-label text-light">Nội dung tin nhắn:</label>
+                    <textarea name="message" class="form-control" rows="3" placeholder="Nhập tin nhắn tuyệt mật..." required></textarea>
                 </div>
-            </div>
-        </div>
-
-        <!-- TẦNG 2: MÃ HÓA BẤT ĐỐI XỨNG RSA -->
-        <h4 class="text-danger fw-bold mb-3"><i class="fa-solid fa-satellite-dish me-2"></i>TẦNG 2: KÊNH LIÊN LẠC BÍ MẬT (RSA)</h4>
-        <div class="row g-4 mb-5">
-            <div class="col-md-4">
-                <div class="card glass-card border-danger h-100">
-                    <div class="card-header bg-danger text-white fw-bold"><i class="fa-solid fa-paper-plane me-2"></i>Soạn tin nhắn RSA</div>
-                    <div class="card-body">
-                        <form method="POST" action="/dashboard">
-                            <div class="mb-3">
-                                <label class="form-label text-light">Chọn người nhận:</label>
-                                <select name="receiver" class="form-select bg-dark text-white border-secondary" required>
-                                    <option value="">-- Chọn User --</option>
-                                    {% for u in other_users %}
-                                        <option value="{{ u }}">{{ u }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label text-light">Tin nhắn (Mã hóa bằng Public Key):</label>
-                                <textarea name="message" class="form-control" rows="3" required placeholder="Nhập tin mật..."></textarea>
-                            </div>
-                            <button type="submit" class="btn btn-outline-danger w-100 fw-bold"><i class="fa-solid fa-user-secret me-2"></i>Mã hóa & Gửi đi</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-8">
-                <div class="card glass-card border-success h-100">
-                    <div class="card-header bg-success text-white fw-bold"><i class="fa-solid fa-inbox me-2"></i>Hộp thư đến (Giải mã bằng Private Key)</div>
-                    <div class="card-body p-2" style="max-height: 300px; overflow-y: auto;">
-                        {% if not inbox %}
-                            <p class="text-muted text-center mt-4">Không có tin nhắn nào.</p>
-                        {% else %}
-                            {% for msg in inbox %}
-                                <div class="mb-3 border border-secondary rounded p-3" style="background: rgba(0,0,0,0.4);">
-                                    <div class="d-flex justify-content-between">
-                                        <span class="text-warning fw-bold"><i class="fa-solid fa-user-ninja me-1"></i> Từ: {{ msg.from }}</span>
-                                        <span class="text-muted small">{{ msg.time }}</span>
-                                    </div>
-                                    <hr class="border-secondary my-2">
-                                    <p class="text-muted small mb-1">Dữ liệu truyền trên mạng (Ciphertext):</p>
-                                    <div class="font-monospace text-danger bg-dark p-2 rounded mb-2 position-relative" style="font-size: 0.65rem; word-wrap: break-word; max-height: 60px; overflow: hidden;">
-                                        {{ msg.ciphertext }}
-                                        <button onclick="navigator.clipboard.writeText('{{ msg.ciphertext }}'); alert('Đã copy!')" 
-                                                class="btn btn-sm btn-outline-danger position-absolute top-0 end-0 m-1" style="padding: 0 4px;">
-                                            <i class="fa-solid fa-copy"></i>
-                                        </button>
-                                    </div>
-                                    <p class="text-light fw-bold mb-0"><i class="fa-solid fa-unlock text-success me-1"></i> Nội dung thực: <span class="text-success font-monospace fs-5">{{ msg.plaintext }}</span></p>
-                                </div>
-                            {% endfor %}
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- TẦNG 3: NHẬT KÝ KIỂM TOÁN (AUDIT LOGS) -->
-        <h4 class="text-warning fw-bold mb-3 mt-5"><i class="fa-solid fa-list-check me-2"></i>TẦNG 3: NHẬT KÝ KIỂM TOÁN HỆ THỐNG (AUDIT LOGS)</h4>
-        <div class="card glass-card border-warning mb-5">
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover table-borderless mb-0" style="background: transparent;">
-                        <thead class="border-bottom border-secondary text-info">
-                            <tr>
-                                <th scope="col" class="py-3 px-4"><i class="fa-regular fa-clock me-1"></i> Thời gian</th>
-                                <th scope="col" class="py-3"><i class="fa-solid fa-bolt me-1"></i> Hành động</th>
-                                <th scope="col" class="py-3"><i class="fa-solid fa-network-wired me-1"></i> IP / Thiết bị</th>
-                                <th scope="col" class="py-3 text-center"><i class="fa-solid fa-signal me-1"></i> Trạng thái</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for log in audit_logs %}
-                            <tr class="border-bottom border-secondary" style="background: rgba(255,255,255,0.02);">
-                                <td class="py-3 px-4 text-light small font-monospace">{{ log.time }}</td>
-                                <td class="py-3 text-light">{{ log.action }}</td>
-                                <td class="py-3 text-muted small"><span class="text-info">{{ log.ip }}</span> <br>{{ log.device }}</td>
-                                <td class="py-3 text-center">
-                                    {% if log.status == 'SUCCESS' %}
-                                        <span class="badge bg-success px-3 py-2"><i class="fa-solid fa-check"></i> THÀNH CÔNG</span>
-                                    {% elif log.status == 'FAILED' %}
-                                        <span class="badge bg-danger px-3 py-2"><i class="fa-solid fa-xmark"></i> THẤT BẠI</span>
-                                    {% else %}
-                                        <span class="badge bg-warning text-dark px-3 py-2"><i class="fa-solid fa-triangle-exclamation"></i> CẢNH BÁO</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr><td colspan="4" class="text-center text-muted py-4">Chưa có dữ liệu hệ thống.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                <button type="submit" class="btn btn-neon w-100" style="border-color: #00fff9; color: #00fff9;">
+                    <i class="fa-solid fa-paper-plane"></i> MÃ HÓA BẤT ĐỐI XỨNG & GỬI
+                </button>
+            </form>
         </div>
     </div>
 </div>
 
-<script>
-    const textToType = "{{ encrypted_note }}";
-    let i = 0;
-    function typeWriter() {
-        if (i < textToType.length) {
-            document.getElementById("hacker-text").innerHTML += textToType.charAt(i);
-            i++;
-            setTimeout(typeWriter, 5); 
-        }
-    }
-    window.onload = function() {
-        if(textToType && textToType.trim() !== "") typeWriter();
-    };
-</script>
+<!-- ========================================== -->
+<!-- HỘP THƯ ĐẾN (GIẢI MÃ RSA)                  -->
+<!-- ========================================== -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="glass-card p-4">
+            <h4 class="text-warning mb-3"><i class="fa-solid fa-inbox"></i> HỘP THƯ ĐẾN (Đã giải mã bằng Private Key)</h4>
+            {% if inbox %}
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover" style="background: rgba(0,0,0,0.3);">
+                        <thead>
+                            <tr style="color: #ff00c1;">
+                                <th>Thời gian</th>
+                                <th>Người gửi</th>
+                                <th>Bản mã hóa (Ciphertext)</th>
+                                <th>Nội dung gốc (Plaintext)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="font-monospace">
+                            {% for msg in inbox %}
+                            <tr>
+                                <td>{{ msg.time }}</td>
+                                <td><span class="badge bg-danger">{{ msg.from }}</span></td>
+                                <!-- Cột Ciphertext được thu gọn lại để không làm vỡ bảng, người dùng có thể trỏ chuột vào để xem toàn bộ -->
+                                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem;" class="text-muted" title="{{ msg.ciphertext }}">{{ msg.ciphertext }}</td>
+                                <td class="text-success fw-bold">{{ msg.plaintext }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted font-monospace">Chưa có tin nhắn nào.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- KHU VỰC ĐIỀU KHIỂN CHUNG                   -->
+<!-- ========================================== -->
+<div class="row mt-5 mb-5">
+    <div class="col-12 d-flex justify-content-center flex-wrap gap-4">
+        
+        <!-- NÚT MỚI: VÀO TRẠM GIÁM SÁT ADMIN -->
+        <a href="{{ url_for('admin_panel') }}" class="btn btn-outline-warning px-4 py-2" style="border-radius: 8px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; border-width: 2px;">
+            <i class="fa-solid fa-user-secret"></i> Trạm Giám Sát Hệ Thống
+        </a>
+        
+        <!-- NÚT CŨ: ĐĂNG XUẤT -->
+        <a href="{{ url_for('logout') }}" class="btn btn-outline-danger px-4 py-2" style="border-radius: 8px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; border-width: 2px;">
+            <i class="fa-solid fa-power-off"></i> Ngắt Kết Nối
+        </a>
+        
+    </div>
+</div>
 {% endblock %}
