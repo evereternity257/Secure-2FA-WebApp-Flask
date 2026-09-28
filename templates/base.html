@@ -99,6 +99,9 @@
         .cursor { animation: blink 1s infinite; }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
     </style>
+    <!-- Liên kết PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#00ff88">
 </head>
 <body>
     <!-- MÀN HÌNH BOOTLOADER -->
@@ -231,6 +234,18 @@
         window.addEventListener('scroll', resetIdleTimer);
         window.addEventListener('click', resetIdleTimer);
         resetIdleTimer();
+    </script>
+    <script>
+        // Đăng ký Service Worker cho PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/static/sw.js').then(function(registration) {
+                    console.log('PWA ServiceWorker đăng ký thành công với phạm vi: ', registration.scope);
+                }, function(err) {
+                    console.log('PWA ServiceWorker đăng ký thất bại: ', err);
+                });
+            });
+        }
     </script>
 </body>
 </html>
