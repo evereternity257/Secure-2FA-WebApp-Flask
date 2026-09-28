@@ -10,7 +10,6 @@ import qrcode
 import os
 import smtplib
 import threading
-import json
 import requests
 from email.mime.text import MIMEText
 from cryptography.fernet import Fernet
@@ -18,6 +17,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 from datetime import datetime
 from dotenv import load_dotenv
+from pymongo import MongoClient
 
 # ==========================================
 # KHỞI TẠO HỆ THỐNG VÀ BIẾN MÔI TRƯỜNG
@@ -29,39 +29,25 @@ SENDER_EMAIL = os.getenv("EMAIL_USER")
 APP_PASSWORD = os.getenv("EMAIL_PASS")
 
 # ==========================================
-# CƠ SỞ DỮ LIỆU NOSQL (JSON PERSISTENCE)
+# CƠ SỞ DỮ LIỆU CLOUD NOSQL (MONGODB ATLAS)
 # ==========================================
-DB_FILE = "database.json"
+# Đọc chuỗi kết nối từ biến môi trường (Hoặc điền trực tiếp nếu chạy local thử nghiệm)
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://elpsycongroo2507_db_user:elpsycongroo@cluster0.erwgn8o.mongodb.net/?retryWrites=true&w=majority")
 
-db_users = {}
-db_messages = []
-db_login_history = [] 
+try:
+    client = MongoClient(MONGO_URI)
+    db = client['DoAnMatMaDB'] # Tên của Database, bạn có thể đổi tùy ý
+    
+    # Định nghĩa các bảng (Collection)
+    users_collection = db['users']
+    messages_collection = db['messages']
+    audit_collection = db['audit_logs'] # Bảng Lịch sử hệ thống chung
+    
+    print("[THÀNH CÔNG] Đã kết nối tới MongoDB Atlas!")
+except Exception as e:
+    print(f"[CẢNH BÁO CRITICAL] Lỗi kết nối MongoDB Atlas: {e}")
+
 db_otp_cache = {} 
-
-def load_db():
-    global db_users, db_messages, db_login_history
-    try:
-        if os.path.exists(DB_FILE):
-            with open(DB_FILE, "r") as f:
-                data = json.load(f)
-                db_users = data.get("users", {})
-                db_messages = data.get("messages", [])
-                db_login_history = data.get("login_history", [])
-    except Exception as e:
-        print(f"[CẢNH BÁO] Lỗi đọc Database: {e}")
-
-def save_db():
-    try:
-        with open(DB_FILE, "w") as f:
-            json.dump({
-                "users": db_users, 
-                "messages": db_messages, 
-                "login_history": db_login_history
-            }, f, indent=4)
-    except Exception as e:
-        print(f"[CẢNH BÁO] Lỗi ghi Database: {e}")
-
-load_db()
 
 # ==========================================
 # TÌNH BÁO BẢO MẬT (CYBER THREAT INTELLIGENCE)
@@ -84,9 +70,12 @@ def check_pwned_password(password: str) -> int:
 # MODULE GIÁM SÁT (AUDIT LOGS)
 # ==========================================
 def log_audit(username: str, action: str, status: str):
-    if username not in db_users: return
+    user_doc = users_collection.find_one({"_id": username})
+    if not user_doc: return
+    
     os_name = request.user_agent.platform.capitalize() if request.user_agent.platform else "Unknown OS"
     browser = request.user_agent.browser.capitalize() if request.user_agent.browser else "Unknown Browser"
+    
     log_entry = {
         "time": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
         "ip": request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip(),
@@ -94,9 +83,21 @@ def log_audit(username: str, action: str, status: str):
         "action": action,
         "status": status 
     }
-    db_users[username].setdefault("audit_logs", []).insert(0, log_entry)
-    db_users[username]["audit_logs"] = db_users[username]["audit_logs"][:15] 
-    save_db()
+    
+    # 1. Lưu log vào danh sách cá nhân của user
+    users_collection.update_one(
+        {"_id": username},
+        {"$push": {"audit_logs": {"$each": [log_entry], "$position": 0, "$slice": 15}}} 
+    )
+    
+    # 2. (Tùy chọn) Lưu log vào bảng Hệ thống chung nếu đăng nhập thành công
+    if action == "Xác thực 2FA (B2)" and status == "SUCCESS":
+         audit_collection.insert_one({
+             "username": username,
+             "login_time": log_entry["time"],
+             "ip_address": log_entry["ip"]
+         })
+
 
 # ==========================================
 # MODULE MẬT MÃ: AES & RSA
@@ -196,27 +197,26 @@ def register():
         username = request.form['username']
         password = request.form['password']
         
-        # --- [BẢN VÁ BẢO MẬT]: CHẶN ĐĂNG KÝ CÁC TÊN NHẠY CẢM ---
         forbidden_names = ['admin', 'administrator', 'root', 'system', 'superuser']
         if username.lower() in forbidden_names:
             flash("Tên tài khoản này bị cấm sử dụng! Vui lòng chọn tên khác.", "danger")
             return redirect(url_for('register'))
-        # ------------------------------------------------------
-        
-        if username in db_users:
+
+        if users_collection.find_one({"_id": username}):
             flash("Tài khoản đã tồn tại!", "danger")
             return redirect(url_for('register'))
 
         pwned_count = check_pwned_password(password)
         if pwned_count > 0:
-            flash(f"CẢNH BÁO: Mật khẩu này đã bị rò rỉ {pwned_count:,} lần trên toàn cầu! Vui lòng chọn mật khẩu khác để đảm bảo an toàn.", "danger")
+            flash(f"CẢNH BÁO: Mật khẩu này đã bị rò rỉ {pwned_count:,} lần! Vui lòng chọn mật khẩu khác.", "danger")
             return redirect(url_for('register'))
 
         clear_codes, hash_codes = generate_recovery_codes()
         rsa_priv, rsa_pub = generate_rsa_keypair()
         method_2fa = request.form.get('method_2fa', 'email')
 
-        db_users[username] = {
+        new_user = {
+            "_id": username,
             "email": request.form['email'],
             "password_hash": hash_password(password),
             "method_2fa": method_2fa,
@@ -231,14 +231,14 @@ def register():
             "last_ip": None
         }
         
-        save_db()
+        users_collection.insert_one(new_user)
         log_audit(username, "Đăng ký tài khoản", "SUCCESS")
 
         qr_url = None
         if method_2fa == 'totp':
             os.makedirs('static/qrcodes', exist_ok=True)
             qr_url = f"/static/qrcodes/{username}.png"
-            qrcode.make(f"otpauth://totp/DoAnMatMa:{username}?secret={db_users[username]['totp_secret']}&issuer=DoAnMatMa").save(f".{qr_url}")
+            qrcode.make(f"otpauth://totp/DoAnMatMa:{username}?secret={new_user['totp_secret']}&issuer=DoAnMatMa").save(f".{qr_url}")
 
         return render_template('register_success.html', qr_url=qr_url, recovery_codes=clear_codes)
     return render_template('register.html')
@@ -248,7 +248,8 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        user_record = db_users.get(username)
+        
+        user_record = users_collection.find_one({"_id": username})
 
         if user_record and verify_password(password, user_record["password_hash"]):
             session['temp_user'] = username
@@ -265,9 +266,9 @@ def login():
 def verify_2fa():
     if 'temp_user' not in session: return redirect(url_for('login'))
     username = session['temp_user']
-    user = db_users[username]
+    user = users_collection.find_one({"_id": username})
 
-    if time.time() < user["lockout_until"]:
+    if time.time() < user.get("lockout_until", 0):
         flash(f"Tài khoản bị khóa! Thử lại sau {int(user['lockout_until'] - time.time())} giây.", "danger")
         return render_template('verify_2fa.html', method=user['method_2fa'])
 
@@ -280,6 +281,7 @@ def verify_2fa():
                 if bcrypt.checkpw(user_code.encode(), hashed_code_str.encode('utf-8')):
                     is_valid = True
                     user["recovery_codes"].pop(i)
+                    users_collection.update_one({"_id": username}, {"$set": {"recovery_codes": user["recovery_codes"]}})
                     flash("Đăng nhập bằng Mã dự phòng thành công!", "success")
                     log_audit(username, "Dùng Mã Dự Phòng", "SUCCESS")
                     break
@@ -290,36 +292,34 @@ def verify_2fa():
                 is_valid = secrets.compare_digest(user_code, get_totp_token(user['totp_secret']))
 
         if is_valid:
-            user["failed_attempts"] = 0 
+            users_collection.update_one({"_id": username}, {"$set": {"failed_attempts": 0}})
             session['logged_in_user'] = username
             session.pop('temp_user', None)
             
             real_ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
-            db_login_history.append({
-                "username": username,
-                "login_time": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                "ip_address": real_ip
-            })
-            
             log_audit(username, "Xác thực 2FA (B2)", "SUCCESS")
             
-            if user["last_ip"] and user["last_ip"] != real_ip:
+            if user.get("last_ip") and user["last_ip"] != real_ip:
                 flash(f"CẢNH BÁO: Phát hiện đăng nhập từ IP lạ ({real_ip}). IP cũ: {user['last_ip']}", "warning")
                 log_audit(username, "Cảnh báo IP Lạ", "WARNING")
-            user["last_ip"] = real_ip
-            save_db() 
+            
+            users_collection.update_one({"_id": username}, {"$set": {"last_ip": real_ip}})
 
             return redirect(url_for('dashboard'))
         else:
-            user["failed_attempts"] += 1
+            new_failed_attempts = user.get("failed_attempts", 0) + 1
             log_audit(username, "Xác thực 2FA (B2)", "FAILED")
-            if user["failed_attempts"] >= 3:
-                user["lockout_until"] = time.time() + 60 
+            
+            update_data = {"failed_attempts": new_failed_attempts}
+            
+            if new_failed_attempts >= 3:
+                update_data["lockout_until"] = time.time() + 60 
                 log_audit(username, "Khóa tài khoản (Brute-Force)", "WARNING")
                 flash("Bạn đã nhập sai 3 lần. Tài khoản bị khóa 60 giây!", "danger")
             else:
-                flash(f"Mã không hợp lệ! Bạn còn {3 - user['failed_attempts']} lần thử.", "warning")
-            save_db() 
+                flash(f"Mã không hợp lệ! Bạn còn {3 - new_failed_attempts} lần thử.", "warning")
+                
+            users_collection.update_one({"_id": username}, {"$set": update_data})
 
     return render_template('verify_2fa.html', method=user['method_2fa'])
 
@@ -327,65 +327,71 @@ def verify_2fa():
 def dashboard():
     if 'logged_in_user' not in session: return redirect(url_for('login'))
     username = session['logged_in_user']
-    user = db_users[username]
+    user = users_collection.find_one({"_id": username})
     
     if request.method == 'POST' and 'secret_note' in request.form:
-        user['secret_note'] = encrypt_data(request.form['secret_note'])
-        save_db() 
+        encrypted_note = encrypt_data(request.form['secret_note'])
+        users_collection.update_one({"_id": username}, {"$set": {"secret_note": encrypted_note}})
+        user['secret_note'] = encrypted_note
         log_audit(username, "Cập nhật Két sắt AES", "SUCCESS")
         flash("Đã mã hóa AES và lưu bí mật thành công!", "success")
         
     if request.method == 'POST' and 'receiver' in request.form:
         receiver = request.form['receiver']
         msg_content = request.form['message']
-        if receiver in db_users:
-            encrypted_msg = rsa_encrypt(db_users[receiver]['rsa_public'], msg_content)
-            db_messages.append({
+        receiver_doc = users_collection.find_one({"_id": receiver})
+        
+        if receiver_doc:
+            encrypted_msg = rsa_encrypt(receiver_doc['rsa_public'], msg_content)
+            messages_collection.insert_one({
                 "from": username, 
                 "to": receiver, 
                 "ciphertext": encrypted_msg, 
                 "time": time.strftime("%H:%M:%S")
             })
-            save_db() 
             log_audit(username, f"Gửi tin RSA cho {receiver}", "SUCCESS")
             flash(f"Đã mã hóa RSA và gửi tin tới {receiver}!", "success")
         else: 
             flash("Người nhận không tồn tại!", "danger")
 
+    # Lấy tin nhắn
     my_inbox = []
     my_private_key = decrypt_data(user['rsa_private']) 
-    for msg in db_messages:
-        if msg['to'] == username:
-            my_inbox.append({
-                "from": msg['from'], "time": msg['time'], 
-                "ciphertext": msg['ciphertext'], "plaintext": rsa_decrypt(my_private_key, msg['ciphertext'])
-            })
+    for msg in messages_collection.find({"to": username}):
+        my_inbox.append({
+            "from": msg['from'], "time": msg['time'], 
+            "ciphertext": msg['ciphertext'], "plaintext": rsa_decrypt(my_private_key, msg['ciphertext'])
+        })
+        
+    # Lấy danh sách user khác để gửi tin
+    other_users = [u['_id'] for u in users_collection.find({"_id": {"$ne": username}}, {"_id": 1})]
 
     return render_template(
         'dashboard.html', username=username, decrypted_note=decrypt_data(user['secret_note']), 
-        encrypted_note=user['secret_note'], other_users=[u for u in db_users.keys() if u != username], 
-        inbox=my_inbox, audit_logs=user['audit_logs']
+        encrypted_note=user['secret_note'], other_users=other_users, 
+        inbox=my_inbox, audit_logs=user.get('audit_logs', [])
     )
 
-# ROUTE MỚI: TRẠM GIÁM SÁT HỆ THỐNG (ĐÃ PHÂN QUYỀN)
 @app.route('/admin-panel')
 def admin_panel():
-    # 1. Kiểm tra xem đã đăng nhập chưa
     if 'logged_in_user' not in session: 
         return redirect(url_for('login'))
     
     username = session['logged_in_user']
-    
-    # 2. KIỂM TRA QUYỀN ADMIN (CHỈ CHO PHÉP TÀI KHOẢN TÊN LÀ "admin")
     if username != 'admin':
-        # Nếu không phải admin, ghi log cảnh báo và đá về Két sắt
         log_audit(username, "Cố gắng truy cập trái phép Admin Panel", "WARNING")
         flash("CẢNH BÁO: BẠN KHÔNG CÓ QUYỀN TRUY CẬP KHU VỰC NÀY!", "danger")
         return redirect(url_for('dashboard'))
     
-    # 3. Nếu đúng là admin thì mới cho xem dữ liệu
-    reversed_history = list(reversed(db_login_history))
-    return render_template('admin.html', login_history=reversed_history, all_users=db_users)
+    # Lấy log hệ thống từ MongoDB, sắp xếp giảm dần theo _id (mới nhất lên trước)
+    history_cursor = audit_collection.find().sort("_id", -1)
+    reversed_history = list(history_cursor)
+    
+    # Lấy tất cả user (Chuyển dạng dict _id làm key để dùng trong template)
+    all_users_cursor = users_collection.find()
+    all_users = {u['_id']: u for u in all_users_cursor}
+    
+    return render_template('admin.html', login_history=reversed_history, all_users=all_users)
 
 @app.route('/logout')
 def logout():
