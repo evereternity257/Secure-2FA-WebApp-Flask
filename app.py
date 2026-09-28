@@ -196,6 +196,13 @@ def register():
         username = request.form['username']
         password = request.form['password']
         
+        # --- [BẢN VÁ BẢO MẬT]: CHẶN ĐĂNG KÝ CÁC TÊN NHẠY CẢM ---
+        forbidden_names = ['admin', 'administrator', 'root', 'system', 'superuser']
+        if username.lower() in forbidden_names:
+            flash("Tên tài khoản này bị cấm sử dụng! Vui lòng chọn tên khác.", "danger")
+            return redirect(url_for('register'))
+        # ------------------------------------------------------
+        
         if username in db_users:
             flash("Tài khoản đã tồn tại!", "danger")
             return redirect(url_for('register'))
@@ -360,12 +367,23 @@ def dashboard():
         inbox=my_inbox, audit_logs=user['audit_logs']
     )
 
-# ROUTE MỚI: TRẠM GIÁM SÁT HỆ THỐNG
+# ROUTE MỚI: TRẠM GIÁM SÁT HỆ THỐNG (ĐÃ PHÂN QUYỀN)
 @app.route('/admin-panel')
 def admin_panel():
+    # 1. Kiểm tra xem đã đăng nhập chưa
     if 'logged_in_user' not in session: 
         return redirect(url_for('login'))
     
+    username = session['logged_in_user']
+    
+    # 2. KIỂM TRA QUYỀN ADMIN (CHỈ CHO PHÉP TÀI KHOẢN TÊN LÀ "admin")
+    if username != 'admin':
+        # Nếu không phải admin, ghi log cảnh báo và đá về Két sắt
+        log_audit(username, "Cố gắng truy cập trái phép Admin Panel", "WARNING")
+        flash("CẢNH BÁO: BẠN KHÔNG CÓ QUYỀN TRUY CẬP KHU VỰC NÀY!", "danger")
+        return redirect(url_for('dashboard'))
+    
+    # 3. Nếu đúng là admin thì mới cho xem dữ liệu
     reversed_history = list(reversed(db_login_history))
     return render_template('admin.html', login_history=reversed_history, all_users=db_users)
 
