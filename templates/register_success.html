@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-7">
+        <div class="card glass-card text-light border-success p-3 mb-5">
+            <div class="card-header bg-transparent border-bottom border-success text-center">
+                <h3 class="text-success fw-bold"><i class="fa-solid fa-circle-check me-2"></i>THIẾT LẬP THÀNH CÔNG</h3>
+                <p class="text-light mb-0">Hoàn tất kích hoạt bảo mật 2 lớp</p>
+            </div>
+            
+            <div class="card-body">
+                {% if qr_url %}
+                    <h5 class="text-warning text-center fw-bold"><i class="fa-solid fa-qrcode me-2"></i>BƯỚC 1: Quét mã Authenticator</h5>
+                    <div class="text-center mt-3">
+                        <div class="bg-white p-2 d-inline-block rounded mb-3 shadow">
+                            <img src="{{ qr_url }}" alt="QR" class="img-fluid">
+                        </div>
+                    </div>
+                    <hr class="border-secondary my-4">
+                {% endif %}
+
+                <h5 class="text-danger text-center fw-bold"><i class="fa-solid fa-life-ring me-2"></i>BƯỚC 2: Lưu Mã Dự Phòng</h5>
+                <p class="text-light text-center small mt-2">
+                    Nếu mất điện thoại hoặc email, hãy dùng các mã này để đăng nhập khẩn cấp. <br>
+                    <strong class="text-warning">Lưu ý: Chép ra giấy ngay vì chúng sẽ KHÔNG BAO GIỜ hiện lại!</strong>
+                </p>
+                
+                <div class="p-4 text-center rounded border border-secondary mt-3" style="background: rgba(0,0,0,0.6);">
+                    <div class="fs-4 font-monospace d-flex flex-wrap justify-content-center gap-2" id="recoveryCodesContainer">
+                        {% for code in recovery_codes %}
+                            <span class="badge bg-dark border border-secondary text-success px-3 py-2 shadow-sm">{{ code }}</span>
+                        {% endfor %}
+                    </div>
+                    <!-- Nút Copy -->
+                    <button onclick="copyCodes()" class="btn btn-sm btn-outline-info mt-3 fw-bold">
+                        <i class="fa-solid fa-copy me-1"></i> Sao chép tất cả mã
+                    </button>
+                </div>
+
+                <a href="/login" class="btn btn-neon w-100 mt-4 fw-bold py-3">
+                    <i class="fa-solid fa-vault me-2"></i> TÔI ĐÃ LƯU MÃ AN TOÀN. ĐĂNG NHẬP NGAY!
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyCodes() {
+    let codesText = "";
+    document.querySelectorAll('#recoveryCodesContainer span').forEach(span => {
+        codesText += span.innerText + "\n";
+    });
+    navigator.clipboard.writeText(codesText).then(() => {
+        alert("Đã sao chép 5 mã dự phòng vào bộ nhớ tạm!");
+    });
+}
+</script>
+{% endblock %}

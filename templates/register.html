@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-6">
+        <div class="card glass-card text-light p-4 border-success shadow-lg mb-5">
+            <div class="text-center mb-4">
+                <i class="fa-solid fa-user-shield fa-4x text-success mb-3"></i>
+                <h3 class="fw-bold">ĐĂNG KÝ TÀI KHOẢN 2FA</h3>
+                <p class="text-muted text-light">Thiết lập lớp bảo vệ kép cho tài khoản của bạn</p>
+            </div>
+            
+            <div class="card-body p-0">
+                <form method="POST" action="/register" id="registerForm">
+                    <div class="mb-3">
+                        <label class="form-label"><i class="fa-solid fa-envelope me-2 text-info"></i>Email thực tế</label>
+                        <input type="email" name="email" class="form-control" placeholder="vidu@gmail.com" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"><i class="fa-solid fa-user me-2 text-info"></i>Tên định danh</label>
+                        <input type="text" name="username" class="form-control" placeholder="Tạo username..." required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label"><i class="fa-solid fa-key me-2 text-info"></i>Mật khẩu</label>
+                        <div class="input-group">
+                            <input type="password" name="password" id="regPassword" class="form-control" placeholder="••••••••" required>
+                            <button class="btn btn-outline-info" type="button" id="togglePass">
+                                <i class="fa-solid fa-eye" id="eyeIcon"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="progress mt-2" style="height: 8px; background-color: rgba(255,255,255,0.1);">
+                            <div id="passStrengthBar" class="progress-bar bg-danger" role="progressbar" style="width: 0%; transition: width 0.4s ease;"></div>
+                        </div>
+                        <small id="passStrengthText" class="text-danger fw-bold mt-1 d-block">Độ mạnh: Quá yếu</small>
+                        
+                        <div class="mt-2 p-2 rounded" style="background: rgba(0,0,0,0.4); font-size: 0.85rem;">
+                            <div class="row">
+                                <div class="col-6"><i class="fa-solid fa-xmark text-danger me-2 req-icon" id="req-length"></i>Trên 8 ký tự</div>
+                                <div class="col-6"><i class="fa-solid fa-xmark text-danger me-2 req-icon" id="req-upper"></i>Chữ viết hoa</div>
+                                <div class="col-6"><i class="fa-solid fa-xmark text-danger me-2 req-icon" id="req-lower"></i>Chữ viết thường</div>
+                                <div class="col-6"><i class="fa-solid fa-xmark text-danger me-2 req-icon" id="req-number"></i>Có chữ số</div>
+                                <div class="col-12 mt-1"><i class="fa-solid fa-xmark text-danger me-2 req-icon" id="req-special"></i>Ký tự đặc biệt (@, #, $,...)</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4 p-3 rounded" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);">
+                        <label class="form-label fw-bold text-warning"><i class="fa-solid fa-shield-halved me-2"></i>Chọn phương thức 2FA:</label>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="radio" name="method_2fa" value="email" checked id="radioEmail">
+                            <label class="form-check-label" for="radioEmail">Mã OTP (Gửi qua Email thật)</label>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="radio" name="method_2fa" value="totp" id="radioTotp">
+                            <label class="form-check-label" for="radioTotp">Google Authenticator (Đề xuất)</label>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" id="submitBtn" class="btn btn-secondary w-100 fw-bold py-2" disabled>
+                        <i class="fa-solid fa-lock me-2"></i>MẬT KHẨU CHƯA ĐẠT CHUẨN
+                    </button>
+                </form>
+                <div class="text-center mt-4">
+                    <a href="/login" class="text-info text-decoration-none"><i class="fa-solid fa-arrow-right-to-bracket me-1"></i> Đã có tài khoản? Đăng nhập ngay</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const togglePass = document.getElementById('togglePass');
+    const passInput = document.getElementById('regPassword');
+    const eyeIcon = document.getElementById('eyeIcon');
+    const submitBtn = document.getElementById('submitBtn');
+    const bar = document.getElementById('passStrengthBar');
+    const text = document.getElementById('passStrengthText');
+
+    togglePass.addEventListener('click', function() {
+        if (passInput.type === "password") {
+            passInput.type = "text";
+            eyeIcon.classList.replace('fa-eye', 'fa-eye-slash');
+        } else {
+            passInput.type = "password";
+            eyeIcon.classList.replace('fa-eye-slash', 'fa-eye');
+        }
+    });
+
+    passInput.addEventListener('input', function() {
+        const val = passInput.value;
+        let score = 0;
+        const checks = {
+            'req-length': val.length >= 8,
+            'req-upper': /[A-Z]/.test(val),
+            'req-lower': /[a-z]/.test(val),
+            'req-number': /[0-9]/.test(val),
+            'req-special': /[^A-Za-z0-9]/.test(val)
+        };
+
+        for (const [id, passed] of Object.entries(checks)) {
+            const el = document.getElementById(id);
+            if (passed) {
+                el.classList.replace('fa-xmark', 'fa-check');
+                el.classList.replace('text-danger', 'text-success');
+                score += 1;
+            } else {
+                el.classList.replace('fa-check', 'fa-xmark');
+                el.classList.replace('text-success', 'text-danger');
+            }
+        }
+
+        bar.style.width = (score * 20) + '%';
+        
+        if (score <= 2) {
+            bar.className = 'progress-bar bg-danger';
+            text.innerHTML = 'Độ mạnh: Quá yếu';
+            text.className = 'text-danger fw-bold mt-1 d-block';
+            lockSubmit();
+        } else if (score === 3 || score === 4) {
+            bar.className = 'progress-bar bg-warning';
+            text.innerHTML = 'Độ mạnh: Khá (Cần thêm ký tự)';
+            text.className = 'text-warning fw-bold mt-1 d-block';
+            lockSubmit();
+        } else if (score === 5) {
+            bar.className = 'progress-bar bg-success';
+            text.innerHTML = 'Độ mạnh: An toàn tuyệt đối!';
+            text.className = 'text-success fw-bold mt-1 d-block';
+            unlockSubmit();
+        }
+    });
+
+    function lockSubmit() {
+        submitBtn.disabled = true;
+        submitBtn.className = 'btn btn-secondary w-100 fw-bold py-2';
+        submitBtn.innerHTML = '<i class="fa-solid fa-lock me-2"></i>MẬT KHẨU CHƯA ĐẠT CHUẨN';
+    }
+
+    function unlockSubmit() {
+        submitBtn.disabled = false;
+        submitBtn.className = 'btn btn-neon w-100 fw-bold py-2';
+        submitBtn.innerHTML = '<i class="fa-solid fa-plus me-2"></i>TẠO TÀI KHOẢN MỚI';
+    }
+</script>
+{% endblock %}

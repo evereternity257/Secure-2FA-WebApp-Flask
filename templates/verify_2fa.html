@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5">
+        <div class="card glass-card p-4 text-center">
+            <div class="mb-4">
+                {% if method == 'email' %}
+                    <i class="fa-solid fa-envelope-open-text fa-4x text-warning mb-3"></i>
+                    <h4 class="text-warning fw-bold">MÃ XÁC THỰC QUA EMAIL</h4>
+                    <p class="text-light">Một email chứa mã 6 số đã được gửi đi. Vui lòng kiểm tra hộp thư của bạn.</p>
+                {% else %}
+                    <i class="fa-solid fa-mobile-screen-button fa-4x text-info mb-3"></i>
+                    <h4 class="text-info fw-bold">MÃ AUTHENTICATOR</h4>
+                    <p class="text-light">Mở app Google Authenticator trên điện thoại để lấy mã.</p>
+                {% endif %}
+            </div>
+
+            <form method="POST" action="/verify-2fa">
+                <div class="mb-4">
+                    <input type="text" name="otp_code" class="form-control form-control-lg text-center fw-bold fs-3 text-warning border-2" 
+                           style="background: rgba(0,0,0,0.5); letter-spacing: 5px;" 
+                           placeholder="6 số OTP hoặc Mã dự phòng" required autocomplete="off" autofocus>
+                </div>
+                <button type="submit" class="btn btn-warning w-100 fw-bold py-2 text-dark">
+                    <i class="fa-solid fa-unlock-keyhole me-2"></i> MỞ KHÓA HỆ THỐNG
+                </button>
+            </form>
+            
+            <div class="mt-4 text-start bg-dark p-3 rounded border border-secondary">
+                <small class="text-muted"><i class="fa-solid fa-circle-info me-1"></i> Mẹo: Nếu mất điện thoại hoặc email, bạn có thể nhập <strong>Mã dự phòng (8 ký tự)</strong> vào ô trên để truy cập khẩn cấp.</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

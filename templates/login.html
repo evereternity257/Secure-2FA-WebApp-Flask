@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5">
+        <div class="card glass-card text-light p-4">
+            <div class="text-center mb-4">
+                <i class="fa-solid fa-shield-halved fa-4x text-success mb-3"></i>
+                <h3 class="fw-bold">CỔNG BẢO MẬT</h3>
+                <p class="text-muted text-light">Nhập thông tin để qua Lớp xác thực 1</p>
+            </div>
+            
+            <form method="POST" action="/login">
+                <div class="mb-3">
+                    <label class="form-label"><i class="fa-solid fa-user me-2"></i>Tên định danh</label>
+                    <input type="text" name="username" class="form-control" placeholder="Nhập username..." required autofocus>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="form-label"><i class="fa-solid fa-key me-2"></i>Mật khẩu khóa bí mật</label>
+                    <div class="input-group">
+                        <input type="password" name="password" id="passInput" class="form-control" placeholder="••••••••" required>
+                        <button class="btn btn-outline-light" type="button" id="togglePass">
+                            <i class="fa-solid fa-eye" id="eyeIcon"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-neon w-100 fw-bold py-2">TIẾN HÀNH XÁC THỰC <i class="fa-solid fa-arrow-right ms-2"></i></button>
+            </form>
+            
+            <div class="text-center mt-4">
+                <a href="/register" class="text-info text-decoration-none"><i class="fa-solid fa-user-plus me-1"></i> Chưa có tài khoản? Đăng ký mới</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const togglePass = document.getElementById('togglePass');
+    const passInput = document.getElementById('passInput');
+    const eyeIcon = document.getElementById('eyeIcon');
+
+    togglePass.addEventListener('click', function() {
+        if (passInput.type === "password") {
+            passInput.type = "text";
+            eyeIcon.classList.replace('fa-eye', 'fa-eye-slash');
+        } else {
+            passInput.type = "password";
+            eyeIcon.classList.replace('fa-eye-slash', 'fa-eye');
+        }
+    });
+</script>
+{% endblock %}
